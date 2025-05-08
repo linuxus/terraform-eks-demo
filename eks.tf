@@ -13,7 +13,7 @@ module "eks" {
   cluster_endpoint_public_access       = true
   cluster_endpoint_public_access_cidrs = var.allowed_ips
 
-# EKS Addons
+# EKS Addons that are necessary for cluster
   cluster_addons = {
     coredns                = {}
     kube-proxy             = {}
