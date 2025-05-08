@@ -9,6 +9,7 @@ module "vpc" {
   private_subnets = var.private_subnet_cidrs
   public_subnets  = var.public_subnet_cidrs
 
+ # 1 NAT Gateway if environment is not prod
   enable_nat_gateway     = true
   single_nat_gateway     = var.environment != "prod"
   one_nat_gateway_per_az = var.environment == "prod"
