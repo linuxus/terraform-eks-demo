@@ -13,6 +13,17 @@ module "eks" {
   cluster_endpoint_public_access       = true
   cluster_endpoint_public_access_cidrs = var.allowed_ips
 
+# Add your terraform-cloud-deployer role to the aws-auth configmap with admin access
+  manage_aws_auth_configmap = true
+  
+  aws_auth_roles = [
+    {
+      rolearn  = "arn:aws:iam::777331576745:role/terraform-cloud-deployer"
+      username = "terraform-deployer"
+      groups   = ["system:masters"]
+    }
+  ]
+
   # EKS Addons that are necessary for cluster
   cluster_addons = {
     coredns                = {}
