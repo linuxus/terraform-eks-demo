@@ -36,7 +36,7 @@ module "eks" {
 # Access Entry Configuration
   access_entries = {
     admin = {
-      kubernetes_groups = ["masters"]  # Changed from "system:masters" to just "masters"
+      kubernetes_groups = ["masters"]
       principal_arn     = var.admin_role_arn
       type              = "STANDARD"
       policy_associations = {
