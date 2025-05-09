@@ -13,7 +13,7 @@ module "eks" {
   cluster_endpoint_public_access       = true
   cluster_endpoint_public_access_cidrs = var.allowed_ips
 
-# EKS Addons that are necessary for cluster
+  # EKS Addons that are necessary for cluster
   cluster_addons = {
     coredns                = {}
     kube-proxy             = {}
@@ -33,7 +33,7 @@ module "eks" {
     }
   }
 
-# Access Entry Configuration
+  # Access Entry Configuration
   access_entries = {
     admin = {
       kubernetes_groups = ["masters"]
@@ -50,11 +50,18 @@ module "eks" {
     }
   }
 
-  # Enable EKS Managed Node Groups
+  # Enable EKS Managed Node Groups with custom IAM role
   eks_managed_node_group_defaults = {
     ami_type       = "AL2_x86_64"
     instance_types = var.node_instance_types
     attach_cluster_primary_security_group = true
+    
+    # Create and use a custom IAM role for the node group
+    create_iam_role = true
+    iam_role_additional_policies = {
+      # Add the required policy for EBS volume operations
+      AmazonEBSCSIDriverPolicy = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+    }
   }
 
   eks_managed_node_groups = {
@@ -103,4 +110,40 @@ resource "aws_iam_role" "ebs_csi_role" {
 resource "aws_iam_role_policy_attachment" "ebs_csi_policy" {
   role       = aws_iam_role.ebs_csi_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+}
+
+# Create a custom policy for additional EBS volume permissions if needed
+resource "aws_iam_policy" "ebs_volume_permissions" {
+  name        = "${local.cluster_name}-ebs-volume-permissions"
+  description = "Additional permissions for EBS volume operations"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "ec2:CreateVolume",
+          "ec2:DeleteVolume",
+          "ec2:AttachVolume",
+          "ec2:DetachVolume",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeVolumesModifications",
+          "ec2:ModifyVolume",
+          "ec2:CreateSnapshot",
+          "ec2:DeleteSnapshot",
+          "ec2:DescribeSnapshots"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+# Attach the custom policy to the EBS CSI role
+resource "aws_iam_role_policy_attachment" "ebs_volume_permissions_attachment" {
+  role       = aws_iam_role.ebs_csi_role.name
+  policy_arn = aws_iam_policy.ebs_volume_permissions.arn
 }
