@@ -147,3 +147,23 @@ resource "aws_iam_role_policy_attachment" "ebs_volume_permissions_attachment" {
   role       = aws_iam_role.ebs_csi_role.name
   policy_arn = aws_iam_policy.ebs_volume_permissions.arn
 }
+
+resource "kubernetes_config_map" "aws_auth" {
+  metadata {
+    name      = "aws-auth"
+    namespace = "kube-system"
+  }
+
+  data = {
+    mapRoles = yamlencode([
+      {
+        rolearn  = "arn:aws:iam::777331576745:role/terraform-cloud-deployer"
+        username = "terraform-deployer"
+        groups   = ["system:masters"]
+      },
+      # Include any existing role mappings
+    ])
+  }
+
+  depends_on = [module.eks]
+}
