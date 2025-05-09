@@ -13,17 +13,6 @@ module "eks" {
   cluster_endpoint_public_access       = true
   cluster_endpoint_public_access_cidrs = var.allowed_ips
 
-# Add your terraform-cloud-deployer role to the aws-auth configmap with admin access
-  manage_aws_auth_configmap = true
-  
-  aws_auth_roles = [
-    {
-      rolearn  = "arn:aws:iam::777331576745:role/terraform-cloud-deployer"
-      username = "terraform-deployer"
-      groups   = ["system:masters"]
-    }
-  ]
-
   # EKS Addons that are necessary for cluster
   cluster_addons = {
     coredns                = {}
@@ -157,4 +146,24 @@ resource "aws_iam_policy" "ebs_volume_permissions" {
 resource "aws_iam_role_policy_attachment" "ebs_volume_permissions_attachment" {
   role       = aws_iam_role.ebs_csi_role.name
   policy_arn = aws_iam_policy.ebs_volume_permissions.arn
+}
+
+resource "kubernetes_config_map" "aws_auth" {
+  metadata {
+    name      = "aws-auth"
+    namespace = "kube-system"
+  }
+
+  data = {
+    mapRoles = yamlencode([
+      {
+        rolearn  = "arn:aws:iam::777331576745:role/terraform-cloud-deployer"
+        username = "terraform-deployer"
+        groups   = ["system:masters"]
+      },
+      # Include any existing role mappings
+    ])
+  }
+
+  depends_on = [module.eks]
 }
