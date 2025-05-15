@@ -149,3 +149,42 @@ resource "aws_iam_role_policy_attachment" "ebs_volume_permissions_attachment" {
   role       = aws_iam_role.ebs_csi_role.name
   policy_arn = aws_iam_policy.ebs_volume_permissions.arn
 }
+
+# Get the security group ID of the node group
+data "aws_security_group" "node_group_sg" {
+  tags = {
+    "aws:eks:cluster-name" = local.cluster_name
+    "eks:nodegroup-name"   = "${local.cluster_name}-default-node-group"
+  }
+
+  # This filter helps to identify the node group SG more precisely
+  filter {
+    name   = "description"
+    values = ["*node*", "*eks*"]
+  }
+
+  # This dependency ensures that the data source is read after the EKS cluster is created
+  depends_on = [module.eks]
+}
+
+# Custom Resource to remove Kubernetes cluster tag from the node security group
+resource "null_resource" "remove_cluster_tag" {
+  # This runs after the EKS module has completed
+  depends_on = [module.eks, data.aws_security_group.node_group_sg]
+  
+  # Only run this when the EKS cluster is created or the security group changes
+  triggers = {
+    node_security_group_id = data.aws_security_group.node_group_sg.id
+    cluster_name           = local.cluster_name
+  }
+
+  # Remove the cluster tag using AWS CLI
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws ec2 delete-tags \
+        --resources ${data.aws_security_group.node_group_sg.id} \
+        --tags Key=kubernetes.io/cluster/${local.cluster_name}
+    EOT
+  }
+}
+
