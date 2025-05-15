@@ -44,12 +44,6 @@ output "public_subnets" {
   value       = module.vpc.public_subnets
 }
 
-# Output the security group IDs for reference
-output "cluster_security_group_id" {
-  description = "EKS cluster security group ID"
-  value       = module.eks.cluster_primary_security_group_id
-}
-
 output "node_security_group_id" {
   description = "EKS node security group ID"
   value       = try(data.aws_security_group.node_group_sg.id, "Not available yet")
