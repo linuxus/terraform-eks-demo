@@ -46,5 +46,5 @@ output "public_subnets" {
 
 output "node_security_group_id" {
   description = "EKS node security group ID"
-  value       = try(data.aws_security_group.node_group_sg.id, "Not available yet")
+  value       = module.eks.node_security_group_id
 }

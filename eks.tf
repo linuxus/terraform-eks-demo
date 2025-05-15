@@ -159,21 +159,35 @@ resource "aws_iam_role_policy_attachment" "ebs_volume_permissions_attachment" {
 # Custom Resource to remove Kubernetes cluster tag from the node security group
 resource "null_resource" "remove_cluster_tag" {
   # This runs after the EKS module has completed
-  depends_on = [module.eks, data.aws_security_group.node_group_sg]
+  depends_on = [module.eks]
   
-  # Only run this when the EKS cluster is created or the security group changes
+  # Only run this when the EKS cluster is created or changes
   triggers = {
-    node_security_group_id = data.aws_security_group.node_group_sg.id
-    cluster_name           = local.cluster_name
+    cluster_name = local.cluster_name
+    unique_id    = uuid() # This ensures the script runs on each apply
   }
 
-  # Remove the cluster tag using AWS CLI
+  # Find and remove the cluster tag using AWS CLI and a shell script
   provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
     command = <<-EOT
-      aws ec2 delete-tags \
-        --resources ${data.aws_security_group.node_group_sg.id} \
-        --tags Key=kubernetes.io/cluster/${local.cluster_name}
+      # Find the node security group by describing all security groups and filtering
+      NODE_SG=$(aws ec2 describe-security-groups \
+        --region ${var.aws_region} \
+        --filters "Name=tag:aws:eks:cluster-name,Values=${local.cluster_name}" \
+        --query "SecurityGroups[?contains(Description, 'nodegroup') || contains(GroupName, 'node')].GroupId" \
+        --output text)
+      
+      echo "Found Node Security Group(s): $NODE_SG"
+      
+      # If multiple security groups are found, process each one
+      for SG_ID in $NODE_SG; do
+        echo "Removing kubernetes.io/cluster/${local.cluster_name} tag from security group $SG_ID"
+        aws ec2 delete-tags \
+          --region ${var.aws_region} \
+          --resources "$SG_ID" \
+          --tags Key=kubernetes.io/cluster/${local.cluster_name}
+      done
     EOT
   }
 }
-
