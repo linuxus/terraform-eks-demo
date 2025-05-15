@@ -43,3 +43,8 @@ output "public_subnets" {
   description = "List of IDs of public subnets"
   value       = module.vpc.public_subnets
 }
+
+output "node_security_group_id" {
+  description = "EKS node security group ID"
+  value       = module.eks.node_security_group_id
+}

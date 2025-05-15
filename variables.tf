@@ -82,3 +82,9 @@ variable "allowed_ips" {
   type        = list(string)
   default     = ["0.0.0.0/0"] # Open to all IPs by default, adjust as needed
 }
+
+variable "enable_node_sg_cluster_tag" {
+  description = "Enable or disable the Kubernetes cluster tag on node security groups"
+  type        = bool
+  default     = false  # Set to false to prevent the cluster tag on node security groups
+}

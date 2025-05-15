@@ -53,18 +53,24 @@ module "eks" {
   }
 
   # Enable EKS Managed Node Groups with custom IAM role
-  eks_managed_node_group_defaults = {
-    ami_type       = "AL2_x86_64"
-    instance_types = var.node_instance_types
-    attach_cluster_primary_security_group = true
-    
-    # Create and use a custom IAM role for the node group
-    create_iam_role = true
-    iam_role_additional_policies = {
-      # Add the required policy for EBS volume operations
-      AmazonEBSCSIDriverPolicy = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-    }
+ eks_managed_node_group_defaults = {
+  ami_type       = "AL2_x86_64"
+  instance_types = var.node_instance_types
+  attach_cluster_primary_security_group = true
+  
+  # Create and use a custom IAM role for the node group
+  create_iam_role = true
+  iam_role_additional_policies = {
+    # Add the required policy for EBS volume operations
+    AmazonEBSCSIDriverPolicy = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
   }
+  
+  # Disable tagging of node security groups with the cluster tag
+  # This prevents the kubernetes.io/cluster/xxx tag from being applied
+  node_security_group_tags = {
+    "kubernetes.io/cluster/${local.cluster_name}" = null
+  }
+}
 
   eks_managed_node_groups = {
     default_node_group = {
@@ -148,4 +154,40 @@ resource "aws_iam_policy" "ebs_volume_permissions" {
 resource "aws_iam_role_policy_attachment" "ebs_volume_permissions_attachment" {
   role       = aws_iam_role.ebs_csi_role.name
   policy_arn = aws_iam_policy.ebs_volume_permissions.arn
+}
+
+# Custom Resource to remove Kubernetes cluster tag from the node security group
+resource "null_resource" "remove_cluster_tag" {
+  # This runs after the EKS module has completed
+  depends_on = [module.eks]
+  
+  # Only run this when the EKS cluster is created or changes
+  triggers = {
+    cluster_name = local.cluster_name
+    unique_id    = uuid() # This ensures the script runs on each apply
+  }
+
+  # Find and remove the cluster tag using AWS CLI and a shell script
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command = <<-EOT
+      # Find the node security group by describing all security groups and filtering
+      NODE_SG=$(aws ec2 describe-security-groups \
+        --region ${var.aws_region} \
+        --filters "Name=tag:aws:eks:cluster-name,Values=${local.cluster_name}" \
+        --query "SecurityGroups[?contains(Description, 'nodegroup') || contains(GroupName, 'node')].GroupId" \
+        --output text)
+      
+      echo "Found Node Security Group(s): $NODE_SG"
+      
+      # If multiple security groups are found, process each one
+      for SG_ID in $NODE_SG; do
+        echo "Removing kubernetes.io/cluster/${local.cluster_name} tag from security group $SG_ID"
+        aws ec2 delete-tags \
+          --region ${var.aws_region} \
+          --resources "$SG_ID" \
+          --tags Key=kubernetes.io/cluster/${local.cluster_name}
+      done
+    EOT
+  }
 }
