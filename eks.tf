@@ -53,18 +53,24 @@ module "eks" {
   }
 
   # Enable EKS Managed Node Groups with custom IAM role
-  eks_managed_node_group_defaults = {
-    ami_type       = "AL2_x86_64"
-    instance_types = var.node_instance_types
-    attach_cluster_primary_security_group = true
-    
-    # Create and use a custom IAM role for the node group
-    create_iam_role = true
-    iam_role_additional_policies = {
-      # Add the required policy for EBS volume operations
-      AmazonEBSCSIDriverPolicy = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-    }
+ eks_managed_node_group_defaults = {
+  ami_type       = "AL2_x86_64"
+  instance_types = var.node_instance_types
+  attach_cluster_primary_security_group = true
+  
+  # Create and use a custom IAM role for the node group
+  create_iam_role = true
+  iam_role_additional_policies = {
+    # Add the required policy for EBS volume operations
+    AmazonEBSCSIDriverPolicy = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
   }
+  
+  # Disable tagging of node security groups with the cluster tag
+  # This prevents the kubernetes.io/cluster/xxx tag from being applied
+  node_security_group_tags = {
+    "kubernetes.io/cluster/${local.cluster_name}" = null
+  }
+}
 
   eks_managed_node_groups = {
     default_node_group = {
